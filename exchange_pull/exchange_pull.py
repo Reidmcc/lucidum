@@ -31,7 +31,7 @@ while True:
             print("interval=",i)
             candles = ex.fetch_ohlcv(m, i)
             for c in candles:
-                # you need to make sure you're not inseting duplicates
+                # you need to make sure you're not inserting duplicates
                 # in postgres ON CONFLICT DO NOTHING takes care of this
                 cur.execute("INSERT INTO CANDLES (exchange, market, c_timestamp, c_interval, c_open, c_high, c_low, c_close, c_volume) \
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;""",
