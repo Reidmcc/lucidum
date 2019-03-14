@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from datetime import timedelta
 import traceback
+import random
 
 class exchange:
     def __init__(self, name, api, intervals, markets=None, lookback=500):
@@ -16,7 +17,6 @@ class exchange:
         else:
             self.specified_markets = False
             self.markets = None
-        # lookback should be in hours
         self.lookback = lookback
         self.ratelimit = self.api.describe()['rateLimit']
 
@@ -38,23 +38,21 @@ class exchange:
 # some exchanges throttle OHLCV calls by data point, use 'lookback=', specified in number of candles, to limit your pulls
 
 # use whichever exchange you prefer, though ccxt call coverage varies
-coinbasepro = exchange('coinbasepro', ccxt.coinbasepro(), ['1m', '5m', '15m', '1h', '6h'], lookback=50)
+coinbasepro = exchange('coinbasepro', ccxt.coinbasepro(), ['1m', '5m', '15m', '1h', '6h'], lookback=100)
 binance = exchange('binance', ccxt.binance(), ["1m","5m", "30m", "1h", "4h"])
 
-exchanges = (binance, coinbasepro)
+exchanges = (coinbasepro, binance)
       
 # candles all go in one table with a composite key: (exchange, market, c_timestamp, c_interval)
 # if your exchange doesn't use UNIX timestamps, convert them
 
 while True:
-
     conn = psycopg2.connect("dbname=lucidum user=postgres password=postgres")
     cur = conn.cursor()
     for ex in exchanges:
         try:
             print('Pulling from {}'.format(ex.name))
             markets = ex.get_markets()
-            # print(markets)
             for m in markets:
                 print("Market=",m)
                 for i in ex.intervals: 
@@ -66,7 +64,10 @@ while True:
                         cur.execute("INSERT INTO CANDLES (exchange, market, c_timestamp, c_interval, c_open, c_high, c_low, c_close, c_volume) \
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;""",
                             (ex.name, m, int(c[0]), i, float(c[1]), float(c[2]), float(c[3]), float(c[4]), float(c[5])))
-                    ex.wait() #you may be making a lot of API calls, so wait between interval calls
+                    if ex.name == 'coinbasepro':
+                        ex.wait(3) 
+                    else:
+                        ex.wait() #you may be making a lot of API calls, so wait between interval calls
                 conn.commit()
         except:
             traceback.print_exc()
@@ -81,4 +82,4 @@ while True:
     print("queried all markets")
     # wait for more data to exist
     print("waiting...")
-    time.sleep(600)
+    time.sleep(300)
